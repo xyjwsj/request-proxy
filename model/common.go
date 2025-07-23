@@ -1,12 +1,23 @@
 package model
 
 import (
+	"bufio"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
 	"sync"
 )
+
+type WrapWriter struct {
+	io.Writer
+}
+
+type WrapRequest struct {
+	Conn   net.Conn
+	Writer *bufio.Writer
+	Reader *bufio.Reader
+}
 
 type ConnResponseWriter struct {
 	Conn net.Conn

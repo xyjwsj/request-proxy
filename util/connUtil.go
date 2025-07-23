@@ -1,17 +1,27 @@
 package util
 
 import (
+	"bytes"
+	"github.com/xyjwsj/request-proxy/model"
 	"log"
 	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
-	"request-proxy/model"
+	"strings"
 )
 
 // IsHTTPRequest 判断是否为 HTTP 请求
-func IsHTTPRequest(data []byte) bool {
-	return len(data) > 4 && string(data[:4]) == "GET "
+func IsHTTPRequest(method, opaque string) bool {
+	return opaque == "443" || method == "GET "
+}
+
+func ISHttpsRequest(url *url.URL) bool {
+	return strings.HasSuffix(url.Host, ":443") || strings.HasPrefix(url.Scheme, "https")
+}
+
+func IsWebSocketHandshake(data []byte) bool {
+	return bytes.Contains(data, []byte("Upgrade: websocket"))
 }
 
 // HandleHTTP 处理 HTTP 请求
