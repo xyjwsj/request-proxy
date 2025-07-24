@@ -3,9 +3,11 @@ package proxy
 import (
 	"bufio"
 	"bytes"
+	"compress/gzip"
 	"crypto/tls"
 	"errors"
 	"fmt"
+	brotli "github.com/google/brotli/go/cbrotli"
 	"github.com/xyjwsj/request-proxy/model"
 	"io"
 	"log"
@@ -13,6 +15,11 @@ import (
 	"net/http"
 	"strconv"
 	"time"
+)
+
+const (
+	ConnectSuccess = "HTTP/1.1 200 Connection Established\r\n\r\n"
+	ConnectFailed  = "HTTP/1.1 502 Bad Gateway\r\n\r\n"
 )
 
 // HandleHTTP 处理 HTTP 请求
@@ -90,9 +97,10 @@ func handleCONNECT(wrapReq model.WrapRequest, req *http.Request) {
 	serverConn.Close()
 
 	// 1. 返回 200 Connection established 响应
-	_, err = fmt.Fprint(wrapReq.Writer, "HTTP/1.1 200 Connection established\r\n\r\n")
+	_, err = fmt.Fprint(wrapReq.Writer, ConnectSuccess)
 	if err != nil {
 		log.Println("Write 200 failed:", err)
+		_, err = fmt.Fprint(wrapReq.Writer, ConnectFailed)
 		return
 	}
 	_ = wrapReq.Writer.Flush() // 立即刷新 buffer，确保响应已发送
@@ -153,7 +161,7 @@ func handleCONNECT(wrapReq model.WrapRequest, req *http.Request) {
 		log.Println(err.Error())
 		return
 	}
-	responseBody, err := io.ReadAll(response.Body)
+	responseBody, err := readResponseBody(response.Body, response.Header)
 	if err != nil {
 		log.Println(err.Error())
 		return
@@ -191,4 +199,22 @@ func setRequest(request *http.Request) *http.Request {
 	request.URL.Host = request.Host
 	request.URL.Scheme = "https"
 	return request
+}
+
+func readResponseBody(body io.ReadCloser, header http.Header) ([]byte, error) {
+	// 检查 Content-Encoding 是否为 gzip
+	switch header.Get("Content-Encoding") {
+	case "gzip":
+		gzr, err := gzip.NewReader(body)
+		if err != nil {
+			return nil, err
+		}
+		defer gzr.Close()
+		return io.ReadAll(gzr)
+	case "br":
+		brr := brotli.NewReader(body)
+		return io.ReadAll(brr)
+	default:
+		return io.ReadAll(body)
+	}
 }
