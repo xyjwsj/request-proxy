@@ -1,8 +1,8 @@
 package proxy
 
 import (
+	"bufio"
 	"bytes"
-	"context"
 	"crypto/tls"
 	"fmt"
 	"github.com/xyjwsj/request-proxy/model"
@@ -10,7 +10,8 @@ import (
 	"log"
 	"net"
 	"net/http"
-	"net/url"
+	"strconv"
+	"time"
 )
 
 // HandleHTTP 处理 HTTP 请求
@@ -56,61 +57,23 @@ func HandleHTTP(wrapReq model.WrapRequest) {
 	req.Header.Set("Content-Length", fmt.Sprintf("%d", len(body)))
 	// ----------------------------------
 
-	// 设置目标地址
-	// 自动获取目标地址
-	targetHost := req.Host
-	if targetHost == "" {
-		targetHost = req.URL.Host
-	}
+	response, err := transport(req)
 
-	if targetHost == "" {
-		log.Println("Cannot determine target host")
+	responseBody, err := io.ReadAll(response.Body)
+	if err != nil {
+		log.Println(err.Error())
 		return
 	}
+	log.Println(string(responseBody))
 
-	scheme := "http"
-	if req.TLS != nil || req.URL.Scheme == "https" {
-		scheme = "https"
-	}
-
-	targetURL, err := url.Parse(fmt.Sprintf("%s://%s", scheme, targetHost))
+	response.Body = io.NopCloser(bytes.NewReader(responseBody))
+	response.Header.Set("Content-Length", strconv.Itoa(len(responseBody)))
+	response.ContentLength = int64(len(responseBody))
+	response.Body = io.NopCloser(bytes.NewReader(responseBody))
+	err = response.Write(wrapReq.Conn)
 	if err != nil {
-		log.Println("Parse URL error:", err)
+		log.Println(err.Error())
 		return
-	}
-
-	req.RequestURI = ""
-	req.URL.Host = targetURL.Host
-	req.URL.Scheme = targetURL.Scheme
-	req.Host = targetURL.Host
-
-	// 自定义 RoundTripper 来拦截请求（可选）
-	transport := &http.Transport{
-		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
-			return wrapReq.Conn, nil
-		},
-	}
-
-	// 使用自定义 Transport 的 Client 发送请求
-	client := &http.Client{
-		Transport: transport,
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			return http.ErrUseLastResponse
-		},
-	}
-
-	// 记录代理请求
-	resp, err := client.Do(req)
-	if err != nil {
-		log.Println("Client Do error:", err)
-		return
-	}
-	defer resp.Body.Close()
-
-	// 将响应写回客户端
-	err = resp.Write(wrapReq.Conn)
-	if err != nil {
-		log.Println("Write response error:", err)
 	}
 }
 
@@ -131,6 +94,7 @@ func handleCONNECT(wrapReq model.WrapRequest, req *http.Request) {
 		log.Println("Write 200 failed:", err)
 		return
 	}
+	_ = wrapReq.Writer.Flush() // 立即刷新 buffer，确保响应已发送
 
 	certificate, err := Cache.GetCertificate(req.Host, "443")
 	if err != nil {
@@ -143,15 +107,75 @@ func handleCONNECT(wrapReq model.WrapRequest, req *http.Request) {
 	cert := certificate.(tls.Certificate)
 	sslConn := tls.Server(wrapReq.Conn, &tls.Config{
 		Certificates: []tls.Certificate{cert},
+		GetCertificate: func(info *tls.ClientHelloInfo) (*tls.Certificate, error) {
+			host := req.Host
+			cert, err := Cache.GetCertificate(host, "443")
+			if err != nil {
+				return nil, err
+			}
+			return cert.(*tls.Certificate), nil
+		},
 	})
 	// ssl校验
 	err = sslConn.Handshake()
 	if err != nil {
 		log.Println("Handshake error:" + err.Error())
 	}
+
+	wrapReq.Conn = sslConn
+	wrapReq.Reader = bufio.NewReader(wrapReq.Conn)
+	wrapReq.Writer = bufio.NewWriter(wrapReq.Conn)
+	request, err := http.ReadRequest(wrapReq.Reader)
+	if err != nil {
+		log.Println(err.Error())
+		return
+	}
+
+	body, _ := io.ReadAll(request.Body)
+	log.Println(string(body))
+	request.Body = io.NopCloser(bytes.NewReader(body))
+	request = setRequest(request)
+	response, err := transport(request)
+	if err != nil {
+		log.Println(err.Error())
+		return
+	}
+	responseBody, err := io.ReadAll(response.Body)
+	if err != nil {
+		log.Println(err.Error())
+		return
+	}
+	log.Println(string(responseBody))
+
+	response.Body = io.NopCloser(bytes.NewReader(responseBody))
+	response.Header.Set("Content-Length", strconv.Itoa(len(responseBody)))
+	response.ContentLength = int64(len(responseBody))
+	response.Body = io.NopCloser(bytes.NewReader(responseBody))
+	err = response.Write(wrapReq.Conn)
+	if err != nil {
+		log.Println(err.Error())
+		return
+	}
+	log.Println("END")
 }
 
-func copyData(dst, src net.Conn, errChan chan<- error) {
-	_, err := io.Copy(dst, src)
-	errChan <- err
+func transport(request *http.Request) (*http.Response, error) {
+	// 去除一些头部
+	response, err := (&http.Transport{
+		DisableKeepAlives:     true,
+		ResponseHeaderTimeout: 60 * time.Second,
+		TLSClientConfig:       &tls.Config{InsecureSkipVerify: true},
+	}).RoundTrip(request)
+	if err != nil {
+		return nil, err
+	}
+	// 去除一些头部
+	return response, err
+}
+
+func setRequest(request *http.Request) *http.Request {
+	request.Header.Set("Connection", "false")
+	request.URL.Host = request.Host
+	request.URL.Scheme = "https"
+	return request
 }
