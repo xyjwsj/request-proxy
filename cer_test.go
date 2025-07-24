@@ -7,7 +7,7 @@ import (
 
 func TestRootCer(t *testing.T) {
 	certificate := util.NewCertificate()
-	certificate.GenerateRootPemFile("platform.hoolai.com")
-	certificate.Init()
-	certificate.GeneratePem("platform.hoolai.com")
+	certificate.GenerateRootPemFile("ReqProxy")
+	//certificate.Init()
+	//certificate.GeneratePem("platform.hoolai.com")
 }

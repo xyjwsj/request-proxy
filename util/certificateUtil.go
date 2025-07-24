@@ -125,7 +125,7 @@ func (i *Certificate) GeneratePem(host string) ([]byte, []byte, error) {
 }
 
 // GenerateRootPemFile 生成新的根证书
-func (i *Certificate) GenerateRootPemFile(host string) (*pem.Block, *pem.Block, error) {
+func (i *Certificate) GenerateRootPemFile(commonName string) (*pem.Block, *pem.Block, error) {
 	max := new(big.Int).Lsh(big.NewInt(1), 128)
 	serialNumber, _ := rand.Int(rand.Reader, max)
 	template := x509.Certificate{
@@ -135,7 +135,7 @@ func (i *Certificate) GenerateRootPemFile(host string) (*pem.Block, *pem.Block, 
 			Organization:       []string{"company"},    // 证书存放的公司名称
 			OrganizationalUnit: []string{"department"}, // 证书所属的部门名称
 			Province:           []string{"BeiJing"},    // 证书签发机构所在省
-			CommonName:         host,
+			CommonName:         commonName,
 			Locality:           []string{"BeiJing"}, // 证书签发机构所在市
 		},
 		NotBefore:             time.Now().AddDate(-1, 0, 0),
@@ -146,14 +146,15 @@ func (i *Certificate) GenerateRootPemFile(host string) (*pem.Block, *pem.Block, 
 		BasicConstraintsValid: true,
 		IsCA:                  true,
 		Issuer: pkix.Name{
-			CommonName: host,
+			CommonName: commonName,
 		},
 	}
-	if ip := net.ParseIP(host); ip != nil {
-		template.IPAddresses = []net.IP{ip}
-	} else {
-		template.DNSNames = []string{host}
-	}
+	// 根证书不需要绑定域名或ip
+	//if ip := net.ParseIP(host); ip != nil {
+	//	template.IPAddresses = []net.IP{ip}
+	//} else {
+	//	template.DNSNames = []string{host}
+	//}
 	priKey, err := i.GenerateKeyPair()
 	if err != nil {
 		return nil, nil, err
