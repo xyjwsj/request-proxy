@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"github.com/xyjwsj/request-proxy/model"
 	"io"
@@ -106,14 +107,26 @@ func handleCONNECT(wrapReq model.WrapRequest, req *http.Request) {
 	}
 	cert := certificate.(tls.Certificate)
 	sslConn := tls.Server(wrapReq.Conn, &tls.Config{
-		Certificates: []tls.Certificate{cert},
+		MinVersion: tls.VersionTLS10, // 支持 TLS 1.0~1.3
+		MaxVersion: tls.VersionTLS13,
+		CipherSuites: []uint16{
+			tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+			tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+			tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,
+			tls.TLS_RSA_WITH_AES_128_GCM_SHA256,
+		},
+		PreferServerCipherSuites: true,
+		Certificates:             []tls.Certificate{cert},
 		GetCertificate: func(info *tls.ClientHelloInfo) (*tls.Certificate, error) {
-			host := req.Host
+			host := info.ServerName
 			cert, err := Cache.GetCertificate(host, "443")
 			if err != nil {
 				return nil, err
 			}
-			return cert.(*tls.Certificate), nil
+			if cerInfo, ok := cert.(tls.Certificate); ok {
+				return &cerInfo, nil
+			}
+			return nil, errors.New("Certificate Error")
 		},
 	})
 	// ssl校验
