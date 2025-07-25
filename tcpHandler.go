@@ -1,71 +1,81 @@
 package proxy
 
 import (
-	"bytes"
-	"fmt"
+	"crypto/tls"
+	"errors"
 	"github.com/xyjwsj/request-proxy/model"
-	"github.com/xyjwsj/request-proxy/util"
-	"io"
 	"log"
 	"net"
-	"net/url"
-	"strings"
 )
 
 // HandleTCP 处理 TCP/WebSocket 连接
-func HandleTCP(clientConn net.Conn) {
-	if clientConn == nil {
-		return
-	}
-	defer clientConn.Close()
+func HandleTCP(wrapReq model.WrapRequest) {
+	defer wrapReq.Conn.Close()
 
-	// 尝试判断是否为 WebSocket 握手
-	if util.IsWebSocketHandshake(nil) {
-		log.Println("Handling WebSocket connection")
-		//handleWebSocket(clientConn, data)
-		return
-	}
-
-	var b [1024]byte
-	n, err := clientConn.Read(b[:])
+	// 1. 读取目标地址（例如 CONNECT 请求中的 Host 或 TLS ClientHello 中的 SNI）
+	targetAddr, err := net.ResolveTCPAddr("tcp", "0")
 	if err != nil {
-		log.Println(err)
+		log.Println("解析tcp代理目标地址错误：" + err.Error())
 		return
 	}
 
-	var method, host, address string
-	fmt.Sscanf(string(b[:bytes.IndexByte(b[:], '\n')]), "%s%s", &method, &host)
-	hostPortURL, err := url.Parse(host)
+	// 2. 连接到目标服务器
+	serverConn, err := net.DialTCP("tcp", nil, targetAddr)
 	if err != nil {
-		log.Println(err)
+		log.Printf("连接到 %s 失败: %v\n", targetAddr, err)
 		return
 	}
+	defer serverConn.Close()
 
-	if hostPortURL.Opaque == "443" { //https访问
-		address = hostPortURL.Scheme + ":443"
-	} else { //http访问
-		if strings.Index(hostPortURL.Host, ":") == -1 { //host不带端口， 默认80
-			address = hostPortURL.Host + ":80"
-		} else {
-			address = hostPortURL.Host
-		}
-	} //获得了请求的host和port，就开始拨号吧
+	log.Printf("建立隧道: 客户端 <-> 代理 <-> %s", targetAddr)
 
-	server, err := net.Dial("tcp", address)
+	// 2. 根据 SNI 获取或生成子证书
+	host, port, _ := net.SplitHostPort(wrapReq.Conn.RemoteAddr().String())
+	cert, err := Cache.GetCertificate(host, port)
 	if err != nil {
-		log.Println(err)
+		log.Printf("Failed to get certificate for %s: %v", host, err)
+		_, _ = wrapReq.Writer.WriteString("HTTP/1.1 502 Bad Gateway\r\n\r\n")
+		_ = wrapReq.Writer.Flush()
 		return
 	}
 
-	if method == "CONNECT" {
-		fmt.Fprint(clientConn, "HTTP/1.1 200 Connection established\r\n\r\n")
-		//io.Copy(client, server)
-		clientBuf := make([]byte, 65535)
-		written, _ := io.CopyBuffer(model.WrapWriter{Writer: server}, clientConn, clientBuf)
-		log.Println("客户端发送服务器:" + string(clientBuf[:written]))
-	} else {
-		server.Write(b[:n])
-		buf, _ := io.ReadAll(server)
-		clientConn.Write(buf)
-	} //进行转发
+	tlsConfig := &tls.Config{
+		MinVersion: tls.VersionTLS10,
+		MaxVersion: tls.VersionTLS13,
+		CipherSuites: []uint16{
+			tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+			tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+			tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,
+			tls.TLS_RSA_WITH_AES_128_GCM_SHA256,
+		},
+		GetCertificate: func(hello *tls.ClientHelloInfo) (*tls.Certificate, error) {
+			host := hello.ServerName
+			cert, err := Cache.GetCertificate(host, "443")
+			if err != nil {
+				return nil, err
+			}
+			if certInfo, ok := cert.(tls.Certificate); ok {
+				return &certInfo, nil
+			}
+			return nil, errors.New("invalid certificate type")
+		},
+		Certificates: []tls.Certificate{cert.(tls.Certificate)},
+	}
+
+	// 3. 开始 TLS 握手
+	sslConn := tls.Server(wrapReq.Conn, tlsConfig)
+	err = sslConn.Handshake()
+	if err != nil {
+		log.Printf("TLS handshake failed: %v", err)
+		return
+	}
+
+	// 3. 双向转发数据
+	errChan := make(chan error, 2)
+
+	//go transferData(wrapReq.Conn, serverConn, errChan)
+	//go transferData(serverConn, wrapReq.Conn, errChan)
+
+	// 等待任意一方关闭
+	<-errChan
 }

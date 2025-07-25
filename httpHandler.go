@@ -14,6 +14,7 @@ import (
 	"net"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -152,6 +153,12 @@ func handleCONNECT(wrapReq model.WrapRequest, req *http.Request) {
 		return
 	}
 
+	replace := false
+	if request.Host == "www.baidu.com" {
+		log.Println("xxxxx")
+		replace = true
+	}
+
 	body, _ := io.ReadAll(request.Body)
 	log.Println(string(body))
 	request.Body = io.NopCloser(bytes.NewReader(body))
@@ -168,11 +175,17 @@ func handleCONNECT(wrapReq model.WrapRequest, req *http.Request) {
 	}
 	log.Println(string(responseBody))
 
-	response.Body = io.NopCloser(bytes.NewReader(responseBody))
-	response.Header.Set("Content-Length", strconv.Itoa(len(responseBody)))
-	response.ContentLength = int64(len(responseBody))
-	response.Body = io.NopCloser(bytes.NewReader(responseBody))
-	err = response.Write(wrapReq.Conn)
+	if replace {
+		responseBody = []byte(strings.ReplaceAll(string(responseBody), "百度一下", "中毒了"))
+	}
+
+	err = writeCompressedResponse(response, responseBody, wrapReq.Conn)
+
+	//response.Body = io.NopCloser(bytes.NewReader(responseBody))
+	//response.Header.Set("Content-Length", strconv.Itoa(len(responseBody)))
+	//response.ContentLength = int64(len(responseBody))
+	//response.Body = io.NopCloser(bytes.NewReader(responseBody))
+	//err = response.Write(wrapReq.Conn)
 	if err != nil {
 		log.Println(err.Error())
 		return
@@ -217,4 +230,53 @@ func readResponseBody(body io.ReadCloser, header http.Header) ([]byte, error) {
 	default:
 		return io.ReadAll(body)
 	}
+}
+
+func writeCompressedResponse(resp *http.Response, body []byte, w io.Writer) error {
+	var out io.Writer = &bytes.Buffer{}
+	var err error
+
+	// 判断原始响应是否使用了压缩
+	switch resp.Header.Get("Content-Encoding") {
+	case "gzip":
+		gzw := gzip.NewWriter(out)
+		_, err = gzw.Write(body)
+		if err != nil {
+			return err
+		}
+		err = gzw.Close()
+		if err != nil {
+			return err
+		}
+		resp.Header.Set("Content-Encoding", "gzip")
+
+	case "br":
+		brw := brotli.NewWriter(out, brotli.WriterOptions{})
+		_, err = brw.Write(body)
+		if err != nil {
+			return err
+		}
+		err = brw.Close()
+		if err != nil {
+			return err
+		}
+		resp.Header.Set("Content-Encoding", "br")
+
+	default:
+		out = bytes.NewBuffer(body)
+	}
+
+	// 设置新的 Body 和 Content-Length
+	resp.Body = io.NopCloser(out.(io.Reader))
+	resp.ContentLength = int64(out.(*bytes.Buffer).Len())
+	resp.Header.Set("Content-Length", strconv.Itoa(out.(*bytes.Buffer).Len()))
+	resp.Header.Del("Transfer-Encoding")
+
+	// 写回客户端
+	err = resp.Write(w)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

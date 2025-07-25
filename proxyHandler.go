@@ -35,14 +35,6 @@ func HandleClient(clientConn net.Conn) {
 		// TODO socket
 	default:
 		// TODO TCP
+		HandleTCP(request)
 	}
-
-	////判断是 HTTP/HTTPS 请求还是 WebSocket/TCP 连接
-	//if util.IsHTTPRequest(method, hostPortURL.Opaque) {
-	//	// HTTP 请求
-	//	HandleHTTP(clientConn, request)
-	//} else {
-	//	// HTTPS/TCP/WebSocket 连接
-	//	HandleTCP(clientConn)
-	//}
 }
