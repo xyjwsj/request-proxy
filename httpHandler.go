@@ -36,7 +36,7 @@ func HandleHTTP(wrapReq model.WrapRequest) {
 	}
 	defer req.Body.Close()
 
-	if req.Method == "CONNECT" {
+	if wrapReq.Https && req.Method == "CONNECT" { // 打开https代理才能支持转发
 		// 处理 CONNECT 请求（HTTPS 隧道）
 		handleCONNECT(wrapReq, req)
 		return
@@ -96,7 +96,7 @@ func interceptorResponse(wrapReq model.WrapRequest, response *http.Response, res
 	if wrapReq.OnResponse != nil {
 		resData := model.ResponseData{
 			ID:     wrapReq.ID,
-			Code:   0,
+			Code:   response.StatusCode,
 			Header: response.Header,
 			Body:   string(responseBody),
 		}

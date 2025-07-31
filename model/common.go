@@ -39,6 +39,7 @@ type WrapRequest struct {
 	Reader     *bufio.Reader
 	OnRequest  RequestCall
 	OnResponse ResponseCall
+	Https      bool
 }
 
 type ConnResponseWriter struct {
