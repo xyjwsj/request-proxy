@@ -4,11 +4,12 @@ import (
 	"bufio"
 	"fmt"
 	"github.com/xyjwsj/request-proxy/model"
+	"github.com/xyjwsj/request-proxy/util"
 	"net"
 )
 
 // HandleClient 处理客户端连接
-func HandleClient(clientConn net.Conn) {
+func HandleClient(clientConn net.Conn, requestCall model.RequestCall, responseCall model.ResponseCall) {
 	defer clientConn.Close()
 
 	reader := bufio.NewReader(clientConn)
@@ -22,9 +23,12 @@ func HandleClient(clientConn net.Conn) {
 	peekHex := fmt.Sprintf("0x%x", peek[0])
 
 	request := model.WrapRequest{
-		Conn:   clientConn,
-		Reader: reader,
-		Writer: writer,
+		ID:         util.UUID(),
+		Conn:       clientConn,
+		Reader:     reader,
+		Writer:     writer,
+		OnRequest:  requestCall,
+		OnResponse: responseCall,
 	}
 
 	switch peekHex {

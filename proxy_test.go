@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"github.com/xyjwsj/request-proxy/model"
 	"github.com/xyjwsj/request-proxy/util"
 	"log"
 	"net"
@@ -18,7 +19,21 @@ func TestRequest(t *testing.T) {
 			log.Println("Accept Error:" + err.Error())
 			continue
 		}
-		go HandleClient(conn)
+		go HandleClient(conn, func(data model.RequestData) model.RequestData {
+			log.Println("请求数据:", data)
+			return model.RequestData{
+				Header: nil,
+				Query:  nil,
+				Body:   "",
+			}
+		}, func(data model.ResponseData) model.ResponseData {
+			log.Println("响应数据:", data)
+			return model.ResponseData{
+				Code:   -1,
+				Header: nil,
+				Body:   "",
+			}
+		})
 	}
 }
 

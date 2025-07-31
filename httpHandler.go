@@ -13,8 +13,8 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/url"
 	"strconv"
-	"strings"
 	"time"
 )
 
@@ -39,26 +39,14 @@ func HandleHTTP(wrapReq model.WrapRequest) {
 		handleCONNECT(wrapReq, req)
 		return
 	}
-	// 你可以在这里修改请求头或 body
-	// ----------------------------------
-	// 修改 Header 示例
-	//req.Header.Set("X-Forwarded-By", "MyProxy")
 
-	// 如果需要删除某些 Header
-	//req.Header.Del("User-Agent")
-	// TODO 修改请求头
-
-	// 如果需要读取并修改 Body，请参考下方 Body 处理部分
-	// 读取 body
 	body, err := io.ReadAll(req.Body)
 	if err != nil {
 		log.Println("Read body error:", err)
 		return
 	}
 
-	// 修改 body 内容
-	// TODO 修改请求Body
-	//body = bytes.Replace(body, []byte("old"), []byte("new"), -1)
+	body = interceptorRequest(wrapReq, req, body)
 
 	// 重新设置 Body
 	req.Body = io.NopCloser(bytes.NewBuffer(body))
@@ -73,7 +61,8 @@ func HandleHTTP(wrapReq model.WrapRequest) {
 		log.Println(err.Error())
 		return
 	}
-	log.Println(string(responseBody))
+
+	responseBody = interceptorResponse(wrapReq, response, responseBody)
 
 	response.Body = io.NopCloser(bytes.NewReader(responseBody))
 	response.Header.Set("Content-Length", strconv.Itoa(len(responseBody)))
@@ -84,6 +73,64 @@ func HandleHTTP(wrapReq model.WrapRequest) {
 		log.Println(err.Error())
 		return
 	}
+}
+
+func interceptorResponse(wrapReq model.WrapRequest, response *http.Response, responseBody []byte) []byte {
+	if wrapReq.OnResponse != nil {
+		resData := model.ResponseData{
+			ID:     wrapReq.ID,
+			Code:   0,
+			Header: response.Header,
+			Body:   string(responseBody),
+		}
+		onResponse := wrapReq.OnResponse(resData)
+		if onResponse.Code >= 0 {
+			response.StatusCode = onResponse.Code
+			response.Status = fmt.Sprintf("%d %s", onResponse.Code, http.StatusText(onResponse.Code))
+		}
+		if onResponse.Header != nil {
+			for key, values := range response.Header {
+				if len(values) > 0 {
+					response.Header.Set(key, values[0])
+				}
+			}
+		}
+		if onResponse.Body != "" {
+			responseBody = []byte(onResponse.Body)
+		}
+	}
+	return responseBody
+}
+
+func interceptorRequest(wrapReq model.WrapRequest, req *http.Request, body []byte) []byte {
+	if wrapReq.OnRequest != nil {
+
+		reqData := model.RequestData{
+			ID:     wrapReq.ID,
+			Url:    req.URL.Path,
+			Method: req.Method,
+			Header: req.Header,
+			Query:  req.URL.Query(),
+			Body:   string(body),
+		}
+
+		request := wrapReq.OnRequest(reqData)
+		if request.Header != nil {
+			for key, values := range request.Header {
+				if len(values) > 0 {
+					req.Header.Set(key, values[0])
+				}
+			}
+		}
+		if request.Query != nil {
+			queryParams := url.Values(request.Query)
+			req.URL.RawQuery = queryParams.Encode()
+		}
+		if request.Body != "" {
+			body = []byte(request.Body)
+		}
+	}
+	return body
 }
 
 func handleCONNECT(wrapReq model.WrapRequest, req *http.Request) {
@@ -153,16 +200,13 @@ func handleCONNECT(wrapReq model.WrapRequest, req *http.Request) {
 		return
 	}
 
-	replace := false
-	if request.Host == "www.baidu.com" {
-		log.Println("xxxxx")
-		replace = true
-	}
-
 	body, _ := io.ReadAll(request.Body)
 	log.Println(string(body))
 	request.Body = io.NopCloser(bytes.NewReader(body))
 	request = setRequest(request)
+
+	body = interceptorRequest(wrapReq, request, body)
+
 	response, err := transport(request)
 	if err != nil {
 		log.Println(err.Error())
@@ -173,11 +217,8 @@ func handleCONNECT(wrapReq model.WrapRequest, req *http.Request) {
 		log.Println(err.Error())
 		return
 	}
-	log.Println(string(responseBody))
 
-	if replace {
-		responseBody = []byte(strings.ReplaceAll(string(responseBody), "百度一下", "中毒了"))
-	}
+	responseBody = interceptorResponse(wrapReq, response, responseBody)
 
 	err = writeCompressedResponse(response, responseBody, wrapReq.Conn)
 

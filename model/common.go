@@ -9,14 +9,36 @@ import (
 	"sync"
 )
 
+type RequestData struct {
+	ID     string              `json:"ID"`
+	Url    string              `json:"url"`
+	Method string              `json:"method"`
+	Header map[string][]string `json:"header"`
+	Query  map[string][]string `json:"query"`
+	Body   string              `json:"body"`
+}
+
+type ResponseData struct {
+	ID     string              `json:"ID"`
+	Code   int                 `json:"code"`
+	Header map[string][]string `json:"header"`
+	Body   string              `json:"body"`
+}
+
+type RequestCall func(data RequestData) RequestData
+type ResponseCall func(data ResponseData) ResponseData
+
 type WrapWriter struct {
 	io.Writer
 }
 
 type WrapRequest struct {
-	Conn   net.Conn
-	Writer *bufio.Writer
-	Reader *bufio.Reader
+	ID         string
+	Conn       net.Conn
+	Writer     *bufio.Writer
+	Reader     *bufio.Reader
+	OnRequest  RequestCall
+	OnResponse ResponseCall
 }
 
 type ConnResponseWriter struct {
