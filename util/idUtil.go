@@ -2,8 +2,10 @@ package util
 
 import (
 	"github.com/google/uuid"
+	"strings"
 )
 
 func UUID() string {
-	return uuid.New().String()
+	id := uuid.New().String()
+	return strings.ReplaceAll(id, "-", "")
 }
