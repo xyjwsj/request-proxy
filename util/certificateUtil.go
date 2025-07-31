@@ -25,7 +25,6 @@ var Cert *Certificate
 type Certificate struct {
 	RootKey    *rsa.PrivateKey
 	RootCa     *x509.Certificate
-	RootCaFile []byte
 	RootCaStr  []byte
 	RootKeyStr []byte
 	StoreDir   string
@@ -72,7 +71,6 @@ func (i *Certificate) Init() error {
 	} else {
 		// 读取文件内容
 		certFileByte, _ := os.ReadFile(certFile)
-		i.RootCaFile = certFileByte
 		keyFileByte, _ := os.ReadFile(keyFile)
 		// 根证书存在,则使用
 		certBlock, _ = pem.Decode(certFileByte)

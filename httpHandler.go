@@ -48,10 +48,10 @@ func HandleHTTP(wrapReq model.WrapRequest) {
 			Header: http.Header{
 				"Content-Type":        []string{"text/plain"},
 				"Content-Disposition": []string{"attachment; filename=" + util.CertDownload},
-				"Content-Length":      []string{strconv.Itoa(len(util.Cert.RootCaFile))},
+				"Content-Length":      []string{strconv.Itoa(len(util.Cert.RootCaStr))},
 			},
-			ContentLength: int64(len(util.Cert.RootCaFile)),
-			Body:          io.NopCloser(bytes.NewReader(util.Cert.RootCaFile)),
+			ContentLength: int64(len(util.Cert.RootCaStr)),
+			Body:          io.NopCloser(bytes.NewReader(util.Cert.RootCaStr)),
 		}
 		util.WriteFullResponse(wrapReq.Conn, response)
 		return
