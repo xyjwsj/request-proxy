@@ -14,30 +14,54 @@ import (
 	"time"
 )
 
+const (
+	certName     = "ReqProxy.crt"
+	keyName      = "ReqProxy.key"
+	CertDownload = certName
+)
+
 var Cert *Certificate
 
 type Certificate struct {
 	RootKey    *rsa.PrivateKey
 	RootCa     *x509.Certificate
+	RootCaFile []byte
 	RootCaStr  []byte
 	RootKeyStr []byte
+	StoreDir   string
 }
 
 func NewCertificate() *Certificate {
 	return &Certificate{
-		RootKey: nil,
-		RootCa:  nil,
+		RootKey:  nil,
+		RootCa:   nil,
+		StoreDir: ".",
 	}
 }
 
-// 初始化根证书
+func NewCertificateWithPath(path string) *Certificate {
+	return &Certificate{
+		RootKey:  nil,
+		RootCa:   nil,
+		StoreDir: path,
+	}
+}
+
+// IsInstallCer 是否安装证书
+func (i *Certificate) IsInstallCer() bool {
+	certFile := CreatePlatformPath(i.StoreDir, certName)
+	keyFile := CreatePlatformPath(i.StoreDir, keyName)
+	return FileExist(certFile) && FileExist(keyFile)
+}
+
+// Init 初始化根证书
 func (i *Certificate) Init() error {
 	var err error
 	var certBlock, keyBlock *pem.Block
-	//certFile := "./hoolai.com_bundle.crt"
-	//keyFile := "./hoolai.com.key"
-	certFile := "./cert.crt"
-	keyFile := "./cert.key"
+	certFile := CreatePlatformPath(i.StoreDir, certName)
+	keyFile := CreatePlatformPath(i.StoreDir, keyName)
+	//certFile := "cert.crt"
+	//keyFile := "./cert.key"
 	// 如果根证书不存在,则生成
 	if !FileExist(certFile) {
 		// 生成根pem文件
@@ -48,6 +72,7 @@ func (i *Certificate) Init() error {
 	} else {
 		// 读取文件内容
 		certFileByte, _ := os.ReadFile(certFile)
+		i.RootCaFile = certFileByte
 		keyFileByte, _ := os.ReadFile(keyFile)
 		// 根证书存在,则使用
 		certBlock, _ = pem.Decode(certFileByte)
@@ -114,8 +139,10 @@ func (i *Certificate) GeneratePem(host string) ([]byte, []byte, error) {
 		Bytes: x509.MarshalPKCS1PrivateKey(priKey),
 	}
 
+	path := CreatePlatformPath(i.StoreDir, "client_cert.cer")
+
 	// 将证书写入.crt文件
-	certFd, _ := os.OpenFile("./client_cert.cer", os.O_WRONLY|os.O_CREATE, os.ModePerm.Perm())
+	certFd, _ := os.OpenFile(path, os.O_WRONLY|os.O_CREATE, os.ModePerm.Perm())
 	defer func() {
 		_ = certFd.Close()
 	}()
@@ -164,8 +191,11 @@ func (i *Certificate) GenerateRootPemFile(commonName string) (*pem.Block, *pem.B
 		return nil, nil, err
 	}
 
+	certFile := CreatePlatformPath(i.StoreDir, certName)
+	keyFile := CreatePlatformPath(i.StoreDir, keyName)
+
 	// 将私钥写入.key文件
-	keyFd, _ := os.OpenFile("./cert.key", os.O_WRONLY|os.O_CREATE, os.ModePerm.Perm())
+	keyFd, _ := os.OpenFile(keyFile, os.O_WRONLY|os.O_CREATE, os.ModePerm.Perm())
 	defer func() {
 		err = keyFd.Close()
 	}()
@@ -179,7 +209,7 @@ func (i *Certificate) GenerateRootPemFile(commonName string) (*pem.Block, *pem.B
 		Bytes: cert,
 	}
 	// 将证书写入.crt文件
-	certFd, _ := os.OpenFile("./cert.crt", os.O_WRONLY|os.O_CREATE, os.ModePerm.Perm())
+	certFd, _ := os.OpenFile(certFile, os.O_WRONLY|os.O_CREATE, os.ModePerm.Perm())
 	defer func() {
 		_ = certFd.Close()
 	}()

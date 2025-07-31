@@ -9,6 +9,7 @@ import (
 	"fmt"
 	brotli "github.com/google/brotli/go/cbrotli"
 	"github.com/xyjwsj/request-proxy/model"
+	"github.com/xyjwsj/request-proxy/util"
 	"io"
 	"log"
 	"net"
@@ -19,8 +20,9 @@ import (
 )
 
 const (
-	ConnectSuccess = "HTTP/1.1 200 Connection Established\r\n\r\n"
-	ConnectFailed  = "HTTP/1.1 502 Bad Gateway\r\n\r\n"
+	ConnectSuccess  = "HTTP/1.1 200 Connection Established\r\n\r\n"
+	ConnectFailed   = "HTTP/1.1 502 Bad Gateway\r\n\r\n"
+	SslDownloadHost = "reqproxy"
 )
 
 // HandleHTTP 处理 HTTP 请求
@@ -37,6 +39,21 @@ func HandleHTTP(wrapReq model.WrapRequest) {
 	if req.Method == "CONNECT" {
 		// 处理 CONNECT 请求（HTTPS 隧道）
 		handleCONNECT(wrapReq, req)
+		return
+	}
+
+	if req.Host == SslDownloadHost && req.URL.Path == "/ssl" {
+		response := &http.Response{
+			StatusCode: http.StatusOK,
+			Header: http.Header{
+				"Content-Type":        []string{"text/plain"},
+				"Content-Disposition": []string{"attachment; filename=" + util.CertDownload},
+				"Content-Length":      []string{strconv.Itoa(len(util.Cert.RootCaFile))},
+			},
+			ContentLength: int64(len(util.Cert.RootCaFile)),
+			Body:          io.NopCloser(bytes.NewReader(util.Cert.RootCaFile)),
+		}
+		util.WriteFullResponse(wrapReq.Conn, response)
 		return
 	}
 
