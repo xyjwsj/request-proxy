@@ -124,6 +124,7 @@ func interceptorRequest(wrapReq model.WrapRequest, req *http.Request, body []byt
 
 		reqData := model.RequestData{
 			ID:     wrapReq.ID,
+			Host:   req.Host,
 			Url:    req.URL.Path,
 			Method: req.Method,
 			Header: req.Header,

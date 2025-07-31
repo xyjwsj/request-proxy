@@ -11,6 +11,7 @@ import (
 
 type RequestData struct {
 	ID     string              `json:"ID"`
+	Host   string              `json:"host"`
 	Url    string              `json:"url"`
 	Method string              `json:"method"`
 	Header map[string][]string `json:"header"`
