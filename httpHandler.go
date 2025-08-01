@@ -62,7 +62,7 @@ func HandleHTTP(wrapReq model.WrapRequest) {
 		log.Println("Read body error:", err)
 		return
 	}
-
+	milli := time.Now().UnixMilli()
 	body = interceptorRequest(wrapReq, req, body)
 
 	// 重新设置 Body
@@ -79,6 +79,7 @@ func HandleHTTP(wrapReq model.WrapRequest) {
 		return
 	}
 
+	wrapReq.Duration = time.Now().UnixMilli() - milli
 	responseBody = interceptorResponse(wrapReq, response, responseBody)
 
 	response.Body = io.NopCloser(bytes.NewReader(responseBody))
