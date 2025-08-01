@@ -10,13 +10,15 @@ import (
 )
 
 type RequestData struct {
-	ID     string              `json:"ID"`
-	Host   string              `json:"host"`
-	Url    string              `json:"url"`
-	Method string              `json:"method"`
-	Header map[string][]string `json:"header"`
-	Query  map[string][]string `json:"query"`
-	Body   string              `json:"body"`
+	ID       string              `json:"ID"`
+	Host     string              `json:"host"`
+	ClientIp string              `json:"clientIp"`
+	TargetIp string              `json:"targetIp"`
+	Url      string              `json:"url"`
+	Method   string              `json:"method"`
+	Header   map[string][]string `json:"header"`
+	Query    map[string][]string `json:"query"`
+	Body     string              `json:"body"`
 }
 
 type ResponseData struct {

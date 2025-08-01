@@ -121,15 +121,20 @@ func interceptorResponse(wrapReq model.WrapRequest, response *http.Response, res
 
 func interceptorRequest(wrapReq model.WrapRequest, req *http.Request, body []byte) []byte {
 	if wrapReq.OnRequest != nil {
-
 		reqData := model.RequestData{
-			ID:     wrapReq.ID,
-			Host:   req.Host,
-			Url:    req.URL.Path,
-			Method: req.Method,
-			Header: req.Header,
-			Query:  req.URL.Query(),
-			Body:   string(body),
+			ID:       wrapReq.ID,
+			ClientIp: util.GetClientIP(wrapReq.Conn),
+			Host:     req.Host,
+			Url:      req.URL.Path,
+			Method:   req.Method,
+			Header:   req.Header,
+			Query:    req.URL.Query(),
+			Body:     string(body),
+		}
+
+		domain, _ := util.GetIPFromDomain(reqData.Host)
+		if domain != nil && len(domain) > 0 {
+			reqData.TargetIp = domain[0]
 		}
 
 		request := wrapReq.OnRequest(reqData)

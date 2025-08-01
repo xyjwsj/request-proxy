@@ -48,3 +48,8 @@ func TestUrlParse(t *testing.T) {
 	parse, _ := url.Parse("CONNECTplatform.hoolai.com:443 HTTP/1.1")
 	log.Println(parse)
 }
+
+func TestDomainIp(t *testing.T) {
+	domain, _ := util.GetIPFromDomain("platform.hoolai.com")
+	log.Println(domain)
+}
