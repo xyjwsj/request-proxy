@@ -95,10 +95,11 @@ func HandleHTTP(wrapReq model.WrapRequest) {
 func interceptorResponse(wrapReq model.WrapRequest, response *http.Response, responseBody []byte) []byte {
 	if wrapReq.OnResponse != nil {
 		resData := model.ResponseData{
-			ID:     wrapReq.ID,
-			Code:   response.StatusCode,
-			Header: response.Header,
-			Body:   string(responseBody),
+			ID:       wrapReq.ID,
+			Code:     response.StatusCode,
+			Header:   response.Header,
+			Body:     string(responseBody),
+			Duration: wrapReq.Duration,
 		}
 		onResponse := wrapReq.OnResponse(resData)
 		if onResponse.Code >= 0 {
@@ -228,6 +229,7 @@ func handleCONNECT(wrapReq model.WrapRequest, req *http.Request) {
 	request.Body = io.NopCloser(bytes.NewReader(body))
 	request = setRequest(request)
 
+	milli := time.Now().UnixMilli()
 	body = interceptorRequest(wrapReq, request, body)
 
 	response, err := transport(request)
@@ -241,6 +243,7 @@ func handleCONNECT(wrapReq model.WrapRequest, req *http.Request) {
 		return
 	}
 
+	wrapReq.Duration = time.Now().UnixMilli() - milli
 	responseBody = interceptorResponse(wrapReq, response, responseBody)
 
 	err = writeCompressedResponse(response, responseBody, wrapReq.Conn)

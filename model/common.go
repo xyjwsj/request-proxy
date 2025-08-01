@@ -22,10 +22,11 @@ type RequestData struct {
 }
 
 type ResponseData struct {
-	ID     string              `json:"ID"`
-	Code   int                 `json:"code"`
-	Header map[string][]string `json:"header"`
-	Body   string              `json:"body"`
+	ID       string              `json:"ID"`
+	Code     int                 `json:"code"`
+	Header   map[string][]string `json:"header"`
+	Body     string              `json:"body"`
+	Duration int64               `json:"duration"`
 }
 
 type RequestCall func(data RequestData) RequestData
@@ -43,6 +44,7 @@ type WrapRequest struct {
 	OnRequest  RequestCall
 	OnResponse ResponseCall
 	Https      bool
+	Duration   int64
 }
 
 type ConnResponseWriter struct {
