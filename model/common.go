@@ -11,6 +11,7 @@ import (
 
 type RequestData struct {
 	ID       string              `json:"ID"`
+	Protocol string              `json:"protocol"`
 	Host     string              `json:"host"`
 	ClientIp string              `json:"clientIp"`
 	TargetIp string              `json:"targetIp"`

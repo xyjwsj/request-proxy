@@ -3,9 +3,11 @@ package proxy
 import (
 	"bufio"
 	"fmt"
+	"log"
+	"net"
+
 	"github.com/xyjwsj/request-proxy/model"
 	"github.com/xyjwsj/request-proxy/util"
-	"net"
 )
 
 type ConfigProxy struct {
@@ -73,6 +75,7 @@ func HandleClient(clientConn net.Conn) {
 		break
 	case "0x5":
 		// TODO socket
+		log.Println("xxxxx")
 	default:
 		// TODO TCP
 		HandleTCP(request)

@@ -7,9 +7,6 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
-	brotli "github.com/google/brotli/go/cbrotli"
-	"github.com/xyjwsj/request-proxy/model"
-	"github.com/xyjwsj/request-proxy/util"
 	"io"
 	"log"
 	"net"
@@ -17,6 +14,10 @@ import (
 	"net/url"
 	"strconv"
 	"time"
+
+	brotli "github.com/google/brotli/go/cbrotli"
+	"github.com/xyjwsj/request-proxy/model"
+	"github.com/xyjwsj/request-proxy/util"
 )
 
 const (
@@ -123,8 +124,13 @@ func interceptorResponse(wrapReq model.WrapRequest, response *http.Response, res
 
 func interceptorRequest(wrapReq model.WrapRequest, req *http.Request, body []byte) []byte {
 	if wrapReq.OnRequest != nil {
+		protocol := "http"
+		if wrapReq.Https {
+			protocol = "https"
+		}
 		reqData := model.RequestData{
 			ID:       wrapReq.ID,
+			Protocol: protocol,
 			ClientIp: util.GetClientIP(wrapReq.Conn),
 			Host:     req.Host,
 			Url:      req.URL.Path,
